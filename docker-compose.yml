@@ -1,0 +1,124 @@
+# Local Phase 2 stack. Credentials below are for disposable development
+# containers only; never reuse them outside this stack.
+
+name: lostfound
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    environment: &phase2-environment
+      ENV: dev
+      DATA_DIR: /app/data
+      LOG_FORMAT: text
+      LOG_LEVEL: INFO
+      CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
+      DATABASE_URL: postgresql+psycopg://lostfound:lostfound@db:5432/lostfound
+      REDIS_URL: redis://redis:6379/0
+      ASYNC_MATCHING: "true"
+      OBJECT_STORAGE_BACKEND: ${OBJECT_STORAGE_BACKEND:-local}
+      S3_BUCKET: ${S3_BUCKET:-}
+      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:-}
+      S3_REGION: ${S3_REGION:-auto}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-}
+    command:
+      - sh
+      - -c
+      - python -m alembic upgrade head && python -m lostfound.cli serve --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./lostfound:/app/lostfound
+      - ./data:/app/data
+      - ./ml:/app/ml
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    command: ["python", "-m", "lostfound.worker"]
+    environment: *phase2-environment
+    volumes:
+      - ./lostfound:/app/lostfound
+      - ./data:/app/data
+      - ./ml:/app/ml
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_started
+    healthcheck:
+      disable: true
+
+  web:
+    image: node:20-alpine
+    working_dir: /app
+    command: sh -c "npm ci && npm run dev -- --host 0.0.0.0"
+    environment:
+      # vite.config.ts proxies /api and /media to this target.
+      API_PROXY_TARGET: http://api:8000
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./web:/app
+      - web-node-modules:/app/node_modules
+    depends_on:
+      - api
+
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: lostfound
+      POSTGRES_PASSWORD: lostfound
+      POSTGRES_DB: lostfound
+    ports:
+      - "5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lostfound -d lostfound"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Historical worker sketch; the active worker service is defined above.
+  #
+  # worker:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile.dev
+  #   command: python -m lostfound.worker
+  #   environment:
+  #     DATABASE_URL: postgresql+psycopg://lostfound:lostfound@db:5432/lostfound
+  #     REDIS_URL: redis://redis:6379/0
+  #   volumes:
+  #     - ./lostfound:/app/lostfound
+  #     - ./data:/app/data
+  #   depends_on:
+  #     db:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+
+volumes:
+  db-data:
+  web-node-modules:

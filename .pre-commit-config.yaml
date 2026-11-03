@@ -1,0 +1,60 @@
+# Install once:  pre-commit install
+# Run on demand: pre-commit run --all-files
+#
+# The lint/type/format hooks are `local` + `language: system` on purpose: they
+# invoke the tools already pinned in pyproject.toml and web/package.json, so
+# there is exactly one version of record and no second pin to drift. Only the
+# file-hygiene hooks come from a pinned repository.
+
+default_language_version:
+  python: python3
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: check-yaml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=2048]
+      - id: detect-private-key
+
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check
+        entry: python -m ruff check --fix
+        language: system
+        types: [python]
+
+      - id: ruff-format
+        name: ruff format
+        entry: python -m ruff format
+        language: system
+        types: [python]
+
+      - id: mypy
+        name: mypy (lostfound + scripts)
+        entry: python -m mypy lostfound scripts
+        language: system
+        pass_filenames: false
+        types: [python]
+
+      - id: eslint
+        name: eslint (web)
+        entry: npm --prefix web run lint
+        language: system
+        files: ^web/.*\.(ts|tsx|js)$
+        pass_filenames: false
+
+      - id: prettier
+        name: prettier (web)
+        entry: npm --prefix web run format:check
+        language: system
+        files: ^web/
+        pass_filenames: false

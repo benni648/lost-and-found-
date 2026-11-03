@@ -1,0 +1,111 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lostfound"
+version = "0.1.0"
+description = "Intelligent Lost & Found object matching — multimodal (visual, textual, temporal, location) evidence."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+keywords = ["lost-and-found", "multimodal", "matching", "computer-vision", "nlp"]
+dependencies = [
+    "numpy>=2.0",
+    "pillow>=10.0",
+    "fastapi>=0.110",
+    "uvicorn>=0.27",
+    "pydantic>=2.6",
+    "pydantic-settings>=2.2",
+    "python-multipart>=0.0.9",
+    "redis>=5.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "httpx>=0.27",
+    "ruff>=0.6",
+    "mypy>=1.11",
+    "pre-commit>=3.7",
+]
+# Schema migrations (Phase 2 moves the runtime onto SQLAlchemy + Postgres).
+migrations = [
+    "sqlalchemy>=2.0",
+    "alembic>=1.13",
+]
+# PostgreSQL engine support for the Phase 2 database transition.
+postgres = [
+    "sqlalchemy>=2.0",
+    "psycopg[binary]>=3.2",
+]
+# S3-compatible private photo storage (AWS S3, Cloudflare R2, MinIO, etc.).
+object-storage = [
+    "boto3>=1.35",
+]
+# Learned re-ranker (stage 2 of the matching plan).
+rerank = [
+    "lightgbm>=4.3",
+    "scikit-learn>=1.5",
+]
+
+[project.scripts]
+lostfound = "lostfound.cli:main"
+
+[project.urls]
+Documentation = "https://github.com/OWNER/lostfound#readme"
+
+[tool.setuptools.packages.find]
+include = ["lostfound*"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+extend-exclude = ["web", "data", "ml", ".venv"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM", "S"]
+ignore = [
+    # A1: `assert` is the right tool in tests and internal preconditions.
+    "S101",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# The corpus and imagery modules are simulations: `random` is correct here and
+# is always seeded, so the "insecure PRNG" warning does not apply.
+"lostfound/corpus.py" = ["S311"]
+"lostfound/imagery.py" = ["S311"]
+"lostfound/cli.py" = ["S311"]
+# Test-only credentials below are synthetic fixtures, never real secrets.
+"tests/**" = ["S105", "S311"]
+# Alembic revisions are generated from migrations/script.py.mako, which ships
+# Alembic's legacy annotations on purpose. Lint env.py and alembic.ini, not the
+# generated revision files.
+"migrations/versions/*" = ["ALL"]
+
+[tool.ruff.lint.flake8-bugbear]
+# Calling these in an argument default is the documented FastAPI idiom.
+extend-immutable-calls = [
+    "fastapi.Body",
+    "fastapi.Cookie",
+    "fastapi.Depends",
+    "fastapi.File",
+    "fastapi.Form",
+    "fastapi.Header",
+    "fastapi.Path",
+    "fastapi.Query",
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["lostfound"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = [
+    "ignore::DeprecationWarning:fastapi.*",
+]
+markers = [
+    "supabase_live: opt-in tests that call a configured Supabase project",
+    "redis_live: opt-in tests that call a configured Redis instance",
+]

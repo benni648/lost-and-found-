@@ -1,0 +1,10 @@
+{
+  "dataset": "stanford_online_products",
+  "encoder": "hist-grid-v1",
+  "pairs": 250,
+  "seed": 0,
+  "positive_mean_cosine": 0.884266,
+  "negative_mean_cosine": 0.880738,
+  "separation": 0.003528,
+  "positive_above_negative_rate": 0.544
+}

@@ -1,0 +1,12 @@
+.venv
+.git
+.github
+node_modules
+web/node_modules
+web/dist
+data
+ml/eval/results.csv
+.pytest_cache
+__pycache__
+*.py[cod]
+.env

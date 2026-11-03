@@ -1,0 +1,73 @@
+name: Nightly
+
+on:
+  schedule:
+    # 02:30 UTC every day — off-peak for the campus, and before the working day.
+    - cron: "30 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
+jobs:
+  eval:
+    name: Retrieval evaluation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Seed the demo corpus
+        run: |
+          python -m lostfound.cli campus
+          python -m lostfound.cli seed
+
+      # Single-seed run appends one row to ml/eval/results.csv: the ablation log.
+      - name: Single-seed evaluation (writes the metric row)
+        run: python -m lostfound.cli eval
+
+      # Mean over independently seeded corpora — one corpus is one draw.
+      - name: Multi-seed evaluation
+        run: python -m lostfound.cli eval --seeds 4 | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Commit the new metric row
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ml/eval/results.csv
+          if git diff --staged --quiet; then
+            echo "No metric change to commit."
+          else
+            git commit -m "chore(eval): nightly retrieval metrics"
+            git push
+          fi
+
+  static-analysis:
+    name: Static analysis (semgrep)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Scheduled rather than per-PR: the rule set changes over time, so this is
+      # a drift signal, not a merge gate. `--error` makes findings fail the job.
+      - name: Run semgrep
+        run: |
+          python -m pip install semgrep
+          semgrep --config auto --error --metrics=off

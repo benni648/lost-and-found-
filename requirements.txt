@@ -1,0 +1,7 @@
+# Dependencies are declared once, in pyproject.toml. This file exists so the
+# documented quickstart keeps working and so the optional ML extras can be
+# installed without any extras:  pip install -r requirements.txt
+#
+#   pip install -e ".[dev,rerank,migrations]"   # everything
+#   pip install -e ".[dev]"                            # runtime + dev tools
+-e .[dev]
